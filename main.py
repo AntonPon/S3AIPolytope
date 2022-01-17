@@ -10,11 +10,11 @@ from scipy import optimize, linalg
 import numpy as np
 from matplotlib import pyplot as plt
 
-from src.models import relu_network
+from src.models.relu_network import ReLUNetwork
 from src._polytope_ import Polytope
 
 
-PATH_TO_SAVE = '/Users/anton/Documents/projects/UnboundedSets/data'
+PATH_TO_SAVE = './data'
 BATCH_SIZE = 16
 NUM_WORKERS = 4
 ITERATIONS = 30
@@ -22,6 +22,7 @@ RESIZE = 10
 OUTPUT_SIZE = 20
 HIDDEN_SIZE = [10, 30, 10]
 DATASET_TYPE = 'mnist'
+USE_GPU = False
 
 
 def get_dataset(path_to_save, transforms, train=True, d_type='mnist'):
@@ -39,12 +40,13 @@ def get_dataset(path_to_save, transforms, train=True, d_type='mnist'):
     return dataset
 
 
-def train_network(model, optimizer, criterion, dataloader):
+def train_network(model, optimizer, criterion, dataloader, device):
     total_train_loss = 0.
     model.train()
     for batch in tqdm(dataloader):
         imgs, labels = batch
-        imgs = imgs.reshape((imgs.size()[0], -1))
+        labels = labels.to(device)
+        imgs = imgs.reshape((imgs.size()[0], -1)).to(device)
         optimizer.zero_grad()
         result = model(imgs)
         loss = criterion(result, labels)
@@ -60,7 +62,8 @@ def val_network(model, criterion, dataloader):
         total_val_loss = 0.
         for batch in dataloader:
             imgs, labels = batch
-            imgs = imgs.reshape((imgs.size()[0], -1))
+            labels = labels.to(device)
+            imgs = imgs.reshape((imgs.size()[0], -1)).to(device)
             result = model(imgs)
             loss = criterion(result, labels)
             total_val_loss += loss.item()
@@ -84,7 +87,7 @@ def is_bounded(A):
 
 
 def scale_check(model_structure, total_points=10):
-    model = relu_network.ReLUNetwork(model_structure)
+    model = ReLUNetwork(model_structure)
     points = torch.rand(total_points, model_structure[0])
     total_val = 0
     for point in points:
@@ -100,7 +103,7 @@ def input_size_experiments(model_structure, max_power=5):
     input_sizes = (np.power(2, i) for i in range(1, max_power+1))
     time_ex = list()
     for input_size in input_sizes:
-        model = relu_network.ReLUNetwork([input_size] + model_structure)
+        model = ReLUNetwork([input_size] + model_structure)
         point = torch.rand(1, input_size)
         poly_dict = model.get_polytope(point)
         poly = Polytope.from_polytope_dict(poly_dict, point)
@@ -117,7 +120,7 @@ def input_size_experiments(model_structure, max_power=5):
 def bit_size_experiments(model_structure,  dtypes=None):
     time_ex = list()
     for dtype in dtypes:
-        model = relu_network.ReLUNetwork(model_structure)
+        model = ReLUNetwork(model_structure)
         point = torch.rand(1, model_structure[0])
         poly_dict = model.get_polytope(point)
         poly = Polytope.from_polytope_dict(poly_dict, point)
@@ -130,13 +133,15 @@ def bit_size_experiments(model_structure,  dtypes=None):
         time_ex.append(end-start)
     return time_ex
 
+
 def plot_time(time_total):
     plt.plot(time_total)
     plt.xticks(range(len(time_total)),  [np.power(2, i) for i in range(1, len(time_total)+1)])
     plt.show()
 
+
 if __name__ == '__main__':
-    signal = False
+    signal = True
     transforms = Compose([Resize(RESIZE), ToTensor()])
     dataset = get_dataset(PATH_TO_SAVE, transforms, d_type=DATASET_TYPE)
     dataloader_train = DataLoader(dataset, BATCH_SIZE, num_workers=NUM_WORKERS)
@@ -144,13 +149,17 @@ if __name__ == '__main__':
     dataset_val = get_dataset(PATH_TO_SAVE, transforms, False, d_type=DATASET_TYPE)
     dataloader_val = DataLoader(dataset_val, BATCH_SIZE, num_workers=NUM_WORKERS)
 
-    model = relu_network.ReLUNetwork([RESIZE*RESIZE] + HIDDEN_SIZE + [OUTPUT_SIZE])
+    model = ReLUNetwork([RESIZE*RESIZE] + HIDDEN_SIZE + [OUTPUT_SIZE])
+    device = 'cpu'
+    if torch.cuda.is_available() and USE_GPU:
+        device = 'cuda:0'
+    model.to(device)
     optimizer = optim.SGD(model.parameters(), lr=1e-3, momentum=0.9)
     criterion = nn.CrossEntropyLoss()
 
     if signal:
         for i in range(1, ITERATIONS + 1):
-            train_loss = train_network(model, optimizer, criterion, dataloader_train)
+            train_loss = train_network(model, optimizer, criterion, dataloader_train, device)
             print("epoch: {}\n train loss: {}".format(i, train_loss))
             val_loss = val_network(model, criterion, dataloader_val)
             print(" val loss: {}".format(val_loss))

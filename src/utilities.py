@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 import polytope as ptope
 import matplotlib.patches as patches
 import copy
-import polytope
 
 ##########################################################################
 #                                                                        #
