@@ -7,11 +7,15 @@ By using code from the project, one can:
 - plot polytopes for 2D case.
 
 To start the project:
-1) Install dependencies:
+1) Create folder **data/** :
+```shell
+$ mkdir data
+```
+2) Install dependencies:
 ```shell
 $ pip install -r requirements.txt
 ```
-2) Run main.py file to run the project: 
+3) Run main.py file to run the project: 
 ```shell 
 $ python main.py
 ```
